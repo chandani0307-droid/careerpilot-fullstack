@@ -9,6 +9,11 @@ from free, no-key sources: Remotive, RemoteOK, Arbeitnow, Jobicy, Himalayas,
 The Muse, RSS. Applying is free too: the Apply button goes to the employer's
 free listing, and CareerPilot never asks anyone to pay to see or apply for a job.
 
+**India-first, not US-only.** CareerPilot is built mainly for Indian users:
+when no region is chosen, India jobs rank above equally relevant jobs
+elsewhere, and Find Jobs defaults to the India region with one-tap city
+shortcuts (Bengaluru, Hyderabad, Pune, Mumbai, Delhi NCR, Chennai).
+
 ## What changed vs the Streamlit version
 
 | | Streamlit version | This version |
@@ -79,7 +84,13 @@ python tests/run_all.py    # 32/32: original core/service tests + FastAPI TestCl
 
 - Free job sources have thinner coverage for onsite jobs in India than paid
   boards do — that is the trade-off for keeping it 100% free. Remote and
-  abroad coverage is much stronger.
+  abroad coverage is much stronger. Checked 2026-11-02: Indeed India and
+  CareerJet RSS feeds are 404, RemoteOK's RSS feed is 404, and Naukri /
+  LinkedIn offer no free open API, so no free no-key source can list India
+  onsite jobs the way a paid board does. What India-first means here: India
+  jobs from the free sources (including remote roles open to India) rank
+  first, the app defaults to India, and the RSS provider no longer dies
+  when one feed goes down.
 - No email verification or "forgot password" yet (needs an email service).
   Google sign-in from the Streamlit version was not carried over.
 - Autopilot runs synchronously in the API request, so a run can take up to

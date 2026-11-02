@@ -136,6 +136,35 @@ def test_dates_regions_and_types():
     assert search.infer_type("Contract Python Developer") == "contract"
 
 
+def test_india_jobs_rank_first_when_region_all():
+    setup_module_env()
+    jobs, report = search.search_jobs("python", "all", "", 60)
+    india_idx = [i for i, j in enumerate(jobs) if j["region"] == "india"]
+    abroad_idx = [i for i, j in enumerate(jobs) if j["region"] == "abroad"]
+    assert india_idx and abroad_idx
+    assert report.get("india_boost") is True
+    assert min(india_idx) < min(abroad_idx), "India jobs must rank first when no region is chosen"
+
+
+def test_dead_rss_feed_does_not_kill_other_feeds():
+    setup_module_env()
+    def flaky(url, params=None, headers=None, timeout=None):
+        if "jobspresso" in url:
+            raise OSError("feed down")
+        return fake_http(url, params, headers, timeout)
+    search.http_get = flaky
+    jobs = search.p_rss("python", "all", "", 30)
+    assert jobs and all(j["source"] == "RSS" for j in jobs)
+
+
+def test_default_rss_feeds_have_no_dead_remoteok_feed():
+    import os as _os
+    _os.environ.pop("JOB_RSS_FEEDS", None)
+    from core.config import cfg as fresh_cfg
+    assert not any("remoteok.com/rss" in f for f in fresh_cfg.rss_feeds)
+    assert any("weworkremotely" in f for f in fresh_cfg.rss_feeds)
+
+
 def test_real_http_function_reads_json_from_a_local_server():
     class H(BaseHTTPRequestHandler):
         def do_GET(self):

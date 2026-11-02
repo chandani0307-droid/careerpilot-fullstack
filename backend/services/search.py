@@ -6,6 +6,9 @@ JSearch (which needed a key) were removed on purpose, so no user is ever sent
 to a paid site to see or apply for a job.
 Free sources: Remotive, RemoteOK, Arbeitnow, Jobicy, Himalayas, The Muse, RSS.
 Every source is wrapped so one failure never breaks the search. Sample jobs only fill in when live results are very few.
+India-first: CareerPilot is built mainly for Indian users. When no region is
+chosen, India jobs are ranked above equally relevant jobs elsewhere, and the
+Find Jobs page defaults to the India region.
 """
 import hashlib
 import html
@@ -170,14 +173,22 @@ def p_jobicy(q, region, location, limit):
 
 def p_himalayas(q, region, location, limit):
     out = []
-    for page in range(1, 3):
-        for j in get_json(URLS["himalayas"], {"q": q, "sort": "recent", "page": page}).get("jobs", []):
+    def add(jobs):
+        for j in jobs:
             places = j.get("locationRestrictions") or []
             out.append(make_job(title=j.get("title"), company=j.get("companyName"), location=", ".join(places) if places else "Worldwide", remote=True,
                                 url=j.get("applicationLink") or j.get("guid"), description=j.get("description") or j.get("excerpt"), source="Himalayas",
                                 tags=(j.get("categories") or []) + [str(x) for x in (j.get("seniority") or [])] if isinstance(j.get("seniority"), list) else (j.get("categories") or []),
                                 salary=salary_text(j.get("minSalary"), j.get("maxSalary"), j.get("currency") or "", j.get("salaryPeriod") or ""),
                                 posted=j.get("pubDate") or j.get("publishedAt"), job_type=j.get("employmentType")))
+    for page in range(1, 3):
+        add(get_json(URLS["himalayas"], {"q": q, "sort": "recent", "page": page}).get("jobs", []))
+    if region in ("all", "india"):
+        # India-first: Himalayas' text search honours "india" in the query — a
+        # "python india" search returns ~18/20 India-restricted roles, while
+        # plain "python" returns ~1/20 (verified live 2026-11-02). The
+        # location= param, by contrast, is ignored by this API.
+        add(get_json(URLS["himalayas"], {"q": f"{q} india", "sort": "recent", "page": 1}).get("jobs", []))
     return out
 
 
@@ -203,9 +214,13 @@ def p_muse(q, region, location, limit):
 
 
 def p_rss(q, region, location, limit):
-    out = []
+    out, errors = [], []
     for feed in cfg.rss_feeds:
-        root = ET.fromstring(http_get(feed))
+        try:
+            root = ET.fromstring(http_get(feed))
+        except Exception as exc:  # noqa: BLE001  (one dead feed must never kill the other feeds)
+            errors.append(f"{feed}: {type(exc).__name__}")
+            continue
         for item in root.iter("item"):
             raw = (item.findtext("title") or "").strip()
             company, title = ("", raw)
@@ -213,6 +228,8 @@ def p_rss(q, region, location, limit):
                 company, title = [s.strip() for s in raw.split(":", 1)]
             out.append(make_job(title=title, company=company or "Unknown", location="Remote", remote=True, url=item.findtext("link"), description=item.findtext("description"),
                                 source="RSS", posted=item.findtext("pubDate")))
+    if not out and errors:
+        raise RuntimeError("RSS feeds failed: " + "; ".join(errors))
     return out
 
 
@@ -229,7 +246,8 @@ def active_sources() -> list[str]:
 
 
 # ───────────────────────── sample jobs (only used when live results are very few) ─────────────────────────
-_SAMPLE = [("Python Backend Engineer", "Nimbus Labs", "Bengaluru, India", ["Python", "FastAPI", "PostgreSQL", "Docker"]), ("Full Stack Developer", "Kiteworks India", "Pune, India", ["React", "Node.js", "TypeScript"]),
+_SAMPLE = [("Software Engineer Trainee", "NexaSoft India", "Bengaluru, India", ["Java", "SQL", "Spring Boot"]), ("Junior Data Analyst (Fresher)", "Setu Analytics", "Hyderabad, India", ["SQL", "Excel", "Python"]),
+           ("Python Backend Engineer", "Nimbus Labs", "Bengaluru, India", ["Python", "FastAPI", "PostgreSQL", "Docker"]), ("Full Stack Developer", "Kiteworks India", "Pune, India", ["React", "Node.js", "TypeScript"]),
            ("Machine Learning Engineer", "Sutra AI", "Hyderabad, India", ["Python", "PyTorch", "NLP"]), ("Data Analyst", "Bharat Retail Analytics", "Gurugram, India", ["SQL", "Power BI", "Excel"]),
            ("DevOps Engineer", "CloudKaveri", "Chennai, India", ["Kubernetes", "Terraform", "AWS"]), ("Frontend Engineer", "Pixelwise", "Mumbai, India", ["React", "TypeScript", "Tailwind CSS"]),
            ("Generative AI Engineer", "Orbit Intelligence", "Bengaluru, India", ["LLMs", "LangChain", "RAG"]), ("Software Engineer", "Nordlicht GmbH", "Berlin, Germany", ["Java", "Spring Boot", "Kafka"]),
@@ -356,6 +374,13 @@ def search_jobs(query: str = "", region: str = "all", location: str = "", limit:
         report["sample"] = len(extra)
     for job in jobs:
         job["relevance"] = relevance(tokens, phrase, job)
+    if region == "all":
+        # India-first: when no region is chosen, India jobs rank above equally
+        # relevant jobs elsewhere. Region-filtered searches are unaffected.
+        for job in jobs:
+            if job["region"] == "india":
+                job["relevance"] = min(100.0, job["relevance"] + 12)
+    report["india_boost"] = region == "all"
     attach_match(jobs, profile)
     if sort == "newest":
         jobs.sort(key=lambda j: (j["posted_at"] or "0000", j["relevance"]), reverse=True)

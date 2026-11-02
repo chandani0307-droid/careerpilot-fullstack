@@ -51,7 +51,10 @@ class Config:
     # If an old .env still has those keys, they are simply ignored now.
     @property
     def rss_feeds(self) -> list[str]:
-        raw = _env("JOB_RSS_FEEDS", "https://weworkremotely.com/categories/remote-programming-jobs.rss,https://weworkremotely.com/categories/remote-data-science-jobs.rss,https://remoteok.com/rss")
+        # Checked 2026-11-02: RemoteOK's /rss feed is now 404, and Indeed India /
+        # CareerJet RSS are 404 too, so they are NOT listed here. Only feeds that
+        # actually return RSS are defaults; p_rss also isolates a dead feed.
+        raw = _env("JOB_RSS_FEEDS", "https://weworkremotely.com/categories/remote-programming-jobs.rss,https://weworkremotely.com/categories/remote-data-science-jobs.rss,https://jobspresso.co/feed/")
         return [x.strip() for x in raw.split(",") if x.strip()]
 
     @property

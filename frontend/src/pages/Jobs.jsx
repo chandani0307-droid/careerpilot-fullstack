@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { api } from "../api.js";
 
 const REGIONS = [["all", "All regions"], ["india", "India"], ["abroad", "Abroad"], ["remote", "Remote"]];
+const INDIA_CITIES = ["Bengaluru", "Hyderabad", "Pune", "Mumbai", "Delhi NCR", "Chennai"];
 
 function JobCard({ job, onChanged }) {
   const [letter, setLetter] = useState("");
@@ -70,7 +71,7 @@ function JobCard({ job, onChanged }) {
 export default function Jobs() {
   const [q, setQ] = useState("");
   const [location, setLocation] = useState("");
-  const [region, setRegion] = useState("all");
+  const [region, setRegion] = useState("india");
   const [level, setLevel] = useState("any");
   const [jobType, setJobType] = useState("any");
   const [posted, setPosted] = useState(0);
@@ -78,7 +79,7 @@ export default function Jobs() {
   const [minMatch, setMinMatch] = useState(0);
   const [jobs, setJobs] = useState([]);
   const [report, setReport] = useState(null);
-  const [tab, setTab] = useState("All");
+  const [tab, setTab] = useState("India");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [searched, setSearched] = useState(false);
@@ -123,7 +124,7 @@ export default function Jobs() {
   return (
     <div>
       <h1>Find jobs</h1>
-      <p className="muted">One search looks across many free job sources at once and ranks the results for you.</p>
+      <p className="muted">India-first: India jobs are shown first. One search looks across many free job sources at once and ranks the results for you.</p>
       <form className="card" onSubmit={submit}>
         <div className="row">
           <div style={{ flex: 3, minWidth: 220 }}>
@@ -132,9 +133,14 @@ export default function Jobs() {
           </div>
           <div style={{ flex: 2, minWidth: 180 }}>
             <label>City or country (optional)</label>
-            <input value={location} onChange={(e) => setLocation(e.target.value)} placeholder="e.g. Pune, Berlin" />
+            <input value={location} onChange={(e) => setLocation(e.target.value)} placeholder="e.g. Bengaluru, Pune" />
           </div>
         </div>
+        <p className="small" style={{ marginTop: 8 }}>Popular in India:{" "}
+          {INDIA_CITIES.map((c) => (
+            <button key={c} type="button" className="chip" style={{ cursor: "pointer" }} onClick={() => { setLocation(c); setRegion("india"); }}>{c}</button>
+          ))}
+        </p>
         <label>Where?</label>
         <div className="tabs">
           {REGIONS.map(([v, l]) => (
