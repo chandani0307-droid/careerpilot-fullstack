@@ -1,0 +1,21 @@
+# Render Blueprint — deploys the CareerPilot FastAPI backend (free plan).
+# In Render: New > Blueprint > connect this repo. Then set DATABASE_URL
+# (Neon, free) and GEMINI_API_KEY (optional shared fallback) in the dashboard.
+# Each user can also enter their OWN free Gemini key on the Settings page.
+services:
+  - type: web
+    name: careerpilot-backend
+    env: python
+    plan: free
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: SECRET_KEY
+        generateValue: true
+      - key: DATABASE_URL
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: DAILY_AI_LIMIT
+        value: "40"

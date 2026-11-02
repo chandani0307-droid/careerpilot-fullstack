@@ -1,0 +1,21 @@
+Aarav Mehta
+aarav.mehta@example.com | +91 98765 43210 | Bengaluru, India
+linkedin.com/in/aarav-mehta | github.com/aaravm
+
+Summary
+Backend engineer with 4 years of experience building APIs and data pipelines.
+
+Experience
+Software Engineer, Acme Systems   2021 - Present
+- Built FastAPI microservices on AWS with PostgreSQL and Docker, cutting API latency by 35%
+- Served 50k users; wrote pytest suites and CI/CD pipelines with GitHub Actions
+- Built a RAG prototype with LangChain and LLMs for internal search
+
+Education
+B.Tech Computer Science, VIT University   2016 - 2020
+
+Skills
+Python, FastAPI, Django, PostgreSQL, Redis, Docker, AWS, Git, REST APIs, SQL, Kubernetes, React, TypeScript
+
+Projects
+Job tracker web app in React and TypeScript
