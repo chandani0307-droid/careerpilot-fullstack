@@ -69,7 +69,7 @@ export default function Settings() {
         {status ? (
           <>
             <p>{status.sources.join(", ")}</p>
-            <div className="success">✅ {status.free_note}</div>
+            <div className="success">{status.free_note}</div>
             <h3>AI</h3>
             <p>Gemini is <b>{status.gemini.available ? `on (${status.gemini.model})` : "off — templates are used"}</b>. {status.ai_note}</p>
             {status.ai_daily_limit !== null && status.ai_daily_limit !== undefined && (
@@ -128,7 +128,7 @@ export default function Settings() {
       </div>
       <div className="card">
         <h2>Your data</h2>
-        <button className="btn secondary" onClick={exportData}>⬇️ Download all my data (JSON)</button>
+        <button className="btn secondary" onClick={exportData}>Download all my data (JSON)</button>
       </div>
     </div>
   );

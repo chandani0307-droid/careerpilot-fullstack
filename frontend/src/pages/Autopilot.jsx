@@ -47,7 +47,7 @@ export default function Autopilot() {
           </div>
         </div>
         <div style={{ marginTop: 12 }}>
-          <button className="btn" disabled={busy} onClick={start}>{busy ? "Agents are working… (this can take a minute)" : "🚀 Run Autopilot"}</button>
+          <button className="btn" disabled={busy} onClick={start}>{busy ? "Agents are working… (this can take a minute)" : "Run Autopilot"}</button>
         </div>
       </div>
       {summary && (

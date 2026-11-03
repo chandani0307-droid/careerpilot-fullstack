@@ -35,12 +35,14 @@ function JobCard({ job, onChanged }) {
 
   return (
     <div className="job">
-      <h3>{job.title}</h3>
+      <div className="job-head">
+        <h3>{job.title}</h3>
+        {job.score > 0 && <span className="match">Match {job.score}%</span>}
+      </div>
       <div className="meta">{[job.company, job.location, job.salary, job.posted_at].filter(Boolean).join(" · ")}</div>
-      <div style={{ marginTop: 6 }}>
+      <div style={{ marginTop: 8 }}>
         <span className="chip src">{job.source}</span>
         <span className="chip">{job.region}</span>
-        {job.score > 0 && <span className="chip ok">Match {job.score}%</span>}
         {(job.matched || []).slice(0, 5).map((s) => <span key={s} className="chip ok">{s}</span>)}
         {(job.missing || []).slice(0, 3).map((s) => <span key={s} className="chip miss">+ {s}</span>)}
         {(job.tags || []).slice(0, 4).map((s) => <span key={s} className="chip">{s}</span>)}
@@ -50,10 +52,10 @@ function JobCard({ job, onChanged }) {
         <details><summary>Job details</summary><p>{job.description.slice(0, 1200)}</p></details>
       )}
       <div className="actions">
-        <a className="btn" href={job.apply_url || job.url} target="_blank" rel="noreferrer" style={{ textDecoration: "none", padding: "9px 16px" }}>Apply ↗</a>
-        <button className="btn secondary" disabled={busy} onClick={save}>{job.saved ? "🔖 Saved" : "🔖 Save"}</button>
-        <button className="btn secondary" disabled={busy || job.applied} onClick={applied}>{job.applied ? "✔ Tracked" : "✔ I applied"}</button>
-        <button className="btn ghost" disabled={busy} onClick={coverLetter}>✍️ Cover letter</button>
+        <a className="btn" href={job.apply_url || job.url} target="_blank" rel="noreferrer">Apply ↗</a>
+        <button className="btn secondary" disabled={busy} onClick={save}>{job.saved ? "Saved" : "Save"}</button>
+        <button className="btn secondary" disabled={busy || job.applied} onClick={applied}>{job.applied ? "Tracked" : "I applied"}</button>
+        <button className="btn ghost" disabled={busy} onClick={coverLetter}>Cover letter</button>
       </div>
       <p className="small muted">{job.source === "Himalayas" ? "Apply on Himalayas — free, no plan needed. Himalayas Plus ($9/mo) is only for AI tools, not required to apply." : `Free to apply on ${job.source} — no payment needed to apply.`}</p>
       {msg && <div className="error">{msg}</div>}
@@ -138,7 +140,7 @@ export default function Jobs() {
         </div>
         <p className="small" style={{ marginTop: 8 }}>Popular in India:{" "}
           {INDIA_CITIES.map((c) => (
-            <button key={c} type="button" className="chip" style={{ cursor: "pointer" }} onClick={() => { setLocation(c); setRegion("india"); }}>{c}</button>
+            <button key={c} type="button" className="city-link" onClick={() => { setLocation(c); setRegion("india"); }}>{c}</button>
           ))}
         </p>
         <label>Where?</label>
@@ -178,7 +180,7 @@ export default function Jobs() {
           </div>
         </div>
         <div style={{ marginTop: 14 }}>
-          <button className="btn" disabled={busy}>{busy ? "Searching…" : "🔍 Search jobs"}</button>
+          <button className="btn" disabled={busy}>{busy ? "Searching…" : "Search jobs"}</button>
         </div>
       </form>
 

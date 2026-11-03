@@ -29,7 +29,7 @@ export default function Auth({ onLogin }) {
   return (
     <div className="wrap">
       <div className="card authbox">
-        <h1>🧭 CareerPilot</h1>
+        <h1 className="brand">Career<span>Pilot</span></h1>
         <p className="muted">Free job-search copilot. No key, no payment — jobs come only from free sources.</p>
         <div className="tabs">
           <button className={mode === "login" ? "active" : ""} onClick={() => setMode("login")}>Log in</button>

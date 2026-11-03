@@ -33,8 +33,8 @@ export default function Dashboard({ go }) {
       </div>
       <div className="card">
         <h2>Follow-ups due</h2>
-        {s.due.length === 0 ? <p className="muted">Nothing due. 🎉</p> : s.due.map((a) => (
-          <p key={a.id}>⏰ <b>{a.title}</b> at {a.company} · due {a.follow_up}</p>
+        {s.due.length === 0 ? <p className="muted">Nothing due.</p> : s.due.map((a) => (
+          <p key={a.id}><b>{a.title}</b> at {a.company} · due {a.follow_up}</p>
         ))}
       </div>
       <div className="card">
@@ -52,8 +52,8 @@ export default function Dashboard({ go }) {
         ))}
       </div>
       <div className="row">
-        <button className="btn" onClick={() => go("jobs")}>🔍 Find jobs</button>
-        <button className="btn secondary" onClick={() => go("autopilot")}>🚀 Run Autopilot</button>
+        <button className="btn" onClick={() => go("jobs")}>Find jobs</button>
+        <button className="btn secondary" onClick={() => go("autopilot")}>Run Autopilot</button>
       </div>
     </div>
   );

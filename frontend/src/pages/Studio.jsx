@@ -69,7 +69,7 @@ export default function Studio() {
           {TONES.map((t) => <option key={t} value={t}>{t}</option>)}
         </select>
         <div className="row" style={{ marginTop: 12 }}>
-          <button className="btn" disabled={busy} onClick={writeLetter}>{busy ? "Writing…" : "✨ Write cover letter"}</button>
+          <button className="btn" disabled={busy} onClick={writeLetter}>{busy ? "Writing…" : "Write cover letter"}</button>
           <button className="btn secondary" disabled={busy} onClick={getTips}>Resume tailoring tips</button>
         </div>
       </div>
@@ -91,8 +91,8 @@ export default function Studio() {
             {d.result?.message && <p className="small muted">{d.result.message}</p>}
             {d.status === "draft" && (
               <div className="row">
-                <button className="btn" onClick={() => approve(d)}>✅ Approve</button>
-                <button className="btn ghost" onClick={() => reject(d)}>✖ Reject</button>
+                <button className="btn" onClick={() => approve(d)}>Approve</button>
+                <button className="btn ghost" onClick={() => reject(d)}>Reject</button>
               </div>
             )}
           </div>

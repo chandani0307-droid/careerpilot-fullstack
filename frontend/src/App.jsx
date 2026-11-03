@@ -50,7 +50,7 @@ export default function App() {
   return (
     <div>
       <header className="topbar">
-        <span className="brand">🧭 CareerPilot</span>
+        <span className="brand">Career<span>Pilot</span></span>
         <nav>
           {PAGES.map(([key, label]) => (
             <button key={key} className={page === key ? "active" : ""} onClick={() => setPage(key)}>
@@ -60,7 +60,7 @@ export default function App() {
         </nav>
         <span className="spacer" />
         <span className="who">{user.name} · {user.email}</span>
-        <button className="btn ghost" style={{ color: "#fff", borderColor: "#4b5563" }} onClick={logout}>
+        <button className="btn ghost" onClick={logout}>
           Log out
         </button>
       </header>
@@ -75,6 +75,9 @@ export default function App() {
         {page === "profile" && <Profile />}
         {page === "settings" && <Settings />}
       </main>
+      <footer className="footer">
+        <b>CareerPilot</b> · Free forever — jobs only from free sources. Applying never costs anything.
+      </footer>
     </div>
   );
 }

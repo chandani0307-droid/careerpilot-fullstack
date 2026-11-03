@@ -42,7 +42,7 @@ export default function Interview() {
         <label>Job description (optional)</label>
         <textarea value={desc} onChange={(e) => setDesc(e.target.value)} />
         <div style={{ marginTop: 12 }}>
-          <button className="btn" disabled={busy} onClick={generate}>{busy ? "Preparing…" : "🎓 Prepare interview sheet"}</button>
+          <button className="btn" disabled={busy} onClick={generate}>{busy ? "Preparing…" : "Prepare interview sheet"}</button>
         </div>
       </div>
       {prep && (
