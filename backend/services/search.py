@@ -160,7 +160,11 @@ def p_arbeitnow(q, region, location, limit):
 
 
 def p_jobicy(q, region, location, limit):
-    data = get_json(URLS["jobicy"], {"count": min(limit, 100), "tag": q})
+    # NOTE: Jobicy's `tag` filter returns 0 jobs even for tag=python (verified
+    # 2026-11-03), so we fetch the board without a tag and filter client-side,
+    # the same way RemoteOK is handled. The provider is marked not-searchable
+    # below so this runs once per search, not once per query.
+    data = get_json(URLS["jobicy"], {"count": min(limit, 100)})
     out = []
     for j in data.get("jobs", []):
         jt = j.get("jobType")
@@ -199,7 +203,7 @@ def p_muse(q, region, location, limit):
             cats += [n for n in names if n not in cats]
     out = []
     for category in (cats or ["Software Engineering"])[:2]:
-        for page in range(0, 2):
+        for page in range(0, 3):
             for j in get_json(URLS["muse"], {"category": category, "page": page}).get("results", []):
                 places = [x.get("name", "") for x in j.get("locations") or []]
                 out.append(make_job(title=j.get("name"), company=(j.get("company") or {}).get("name"), location=", ".join(places) or "Flexible / Remote",
@@ -236,7 +240,7 @@ def p_rss(q, region, location, limit):
 # name -> (function, accepts a search term, is it available?)
 PROVIDERS = {
     "Remotive": (p_remotive, True, lambda: True), "RemoteOK": (p_remoteok, False, lambda: True), "Arbeitnow": (p_arbeitnow, False, lambda: True),
-    "Jobicy": (p_jobicy, True, lambda: True), "Himalayas": (p_himalayas, True, lambda: True), "The Muse": (p_muse, True, lambda: True),
+    "Jobicy": (p_jobicy, False, lambda: True), "Himalayas": (p_himalayas, True, lambda: True), "The Muse": (p_muse, True, lambda: True),
     "RSS": (p_rss, False, lambda: bool(cfg.rss_feeds)),
 }
 
@@ -324,6 +328,30 @@ def _dedupe(jobs: list[dict]) -> list[dict]:
     return list(best.values())
 
 
+def _diversify(jobs: list[dict]) -> list[dict]:
+    """Round-robin by source so no one board fills the whole first page.
+
+    Relevance order is kept inside each source; the list is interleaved
+    instead, because only Himalayas and RemoteOK do a real keyword search —
+    without this, the visible results were ~50% Himalayas and ~50% RemoteOK
+    even though other free sources also return matching jobs.
+    """
+    by_source: dict[str, list[dict]] = {}
+    for job in jobs:
+        by_source.setdefault(job["source"], []).append(job)
+    out, i = [], 0
+    while len(out) < len(jobs):
+        progressed = False
+        for source_jobs in by_source.values():
+            if i < len(source_jobs):
+                out.append(source_jobs[i])
+                progressed = True
+        if not progressed:
+            break
+        i += 1
+    return out
+
+
 def _passes(job: dict, region: str, location: str, f: dict) -> bool:
     if region != "all" and job["region"] != region:
         return False
@@ -386,6 +414,7 @@ def search_jobs(query: str = "", region: str = "all", location: str = "", limit:
         jobs.sort(key=lambda j: (j["posted_at"] or "0000", j["relevance"]), reverse=True)
     else:
         jobs.sort(key=lambda j: j["relevance"] * (0.55 if profile else 1) + j.get("score", 0) * (0.45 if profile else 0), reverse=True)
+    jobs = _diversify(jobs)
     report["elapsed"] = round(time.time() - started, 1)
     report["candidates"] = len(raw)
     return jobs[:limit], report

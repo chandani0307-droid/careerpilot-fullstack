@@ -55,7 +55,7 @@ function JobCard({ job, onChanged }) {
         <button className="btn secondary" disabled={busy || job.applied} onClick={applied}>{job.applied ? "✔ Tracked" : "✔ I applied"}</button>
         <button className="btn ghost" disabled={busy} onClick={coverLetter}>✍️ Cover letter</button>
       </div>
-      <p className="small muted">Free to apply — CareerPilot never charges, and this link goes to the employer's free listing.</p>
+      <p className="small muted">{job.source === "Himalayas" ? "Apply on Himalayas — free, no plan needed. Himalayas Plus ($9/mo) is only for AI tools, not required to apply." : `Free to apply on ${job.source} — no payment needed to apply.`}</p>
       {msg && <div className="error">{msg}</div>}
       {showLetter && (
         <div>

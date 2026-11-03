@@ -61,7 +61,12 @@ def test_returns_sixty_unique_relevant_jobs():
     assert len(jobs) == 60, len(jobs)
     assert len({j["id"] for j in jobs}) == 60
     assert not any("Marketing" in j["title"] or "Sales" in j["title"] for j in jobs), "irrelevant jobs must be filtered out"
-    assert [j["relevance"] for j in jobs] == sorted((j["relevance"] for j in jobs), reverse=True)
+    # Relevance order is kept inside each source; the list is interleaved by
+    # source so no one board dominates the first page.
+    for s in {j["source"] for j in jobs}:
+        rels = [j["relevance"] for j in jobs if j["source"] == s]
+        assert rels == sorted(rels, reverse=True), s
+    assert len({j["source"] for j in jobs[:10]}) >= 3, "top results must mix sources"
     assert all(report["sources"][s]["count"] > 0 for s in ("Remotive", "RemoteOK", "Arbeitnow", "Jobicy", "Himalayas", "The Muse"))
     assert "Adzuna" not in report["sources"] and "JSearch" not in report["sources"], "paid-key sources must not be used in the free version"
     assert set(search.active_sources()) == {"Remotive", "RemoteOK", "Arbeitnow", "Jobicy", "Himalayas", "The Muse", "RSS"}
@@ -104,13 +109,23 @@ def test_all_sources_down_falls_back_to_clearly_marked_samples():
     assert jobs and all(j["source"] == "Sample" for j in jobs) and report["sample"] == len(jobs) and report["live"] == 0
 
 
+def test_diversify_interleaves_sources_without_reordering_inside_a_source():
+    a = [{"source": "Himalayas", "relevance": 90}, {"source": "Himalayas", "relevance": 80}, {"source": "Himalayas", "relevance": 70}]
+    b = [{"source": "RemoteOK", "relevance": 85}, {"source": "RemoteOK", "relevance": 75}]
+    out = search._diversify(a + b)
+    assert [j["source"] for j in out] == ["Himalayas", "RemoteOK", "Himalayas", "RemoteOK", "Himalayas"]
+    assert [j["relevance"] for j in out if j["source"] == "Himalayas"] == [90, 80, 70]
+
+
 def test_filters_and_sorting():
     setup_module_env()
     senior, _ = search.search_jobs("python", "all", "", 60, filters={"level": "senior"})
     assert senior and all(j["level"] == "senior" for j in senior)
     newest, _ = search.search_jobs("python", "all", "", 60, sort="newest")
-    dates = [j["posted_at"] or "0000" for j in newest]
-    assert dates == sorted(dates, reverse=True)
+    # Newest order is kept inside each source; sources are interleaved.
+    for s in {j["source"] for j in newest}:
+        dates = [j["posted_at"] or "0000" for j in newest if j["source"] == s]
+        assert dates == sorted(dates, reverse=True), s
 
 
 def test_profile_scoring_changes_order_and_adds_skill_chips():
