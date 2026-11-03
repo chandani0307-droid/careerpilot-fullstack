@@ -54,12 +54,68 @@ def get_job(job_id: str) -> dict | None:
 
 
 # ───────────── last search results, saved jobs, search history ─────────────
-def save_results(user_id: str, jobs: list[dict], query: str, region: str, location: str) -> None:
+def save_results(user_id: str, jobs: list[dict], query: str, region: str, location: str, filters: dict | None = None, sort: str = "best") -> str:
+    """Save the latest results (for the dashboard) AND a permanent per-user
+    history entry, so a search survives page switches, refresh and logout.
+    The history entry keeps the full job list, so reopening it needs no
+    re-search. Only the newest 20 entries per user are kept."""
     upsert_jobs(jobs)
     db.execute("DELETE FROM results WHERE user_id = ?", (user_id,))
     for pos, job in enumerate(jobs):
         db.execute("INSERT INTO results (user_id, job_id, pos, relevance) VALUES (?, ?, ?, ?)", (user_id, job["id"], pos, job.get("relevance", 0)))
     db.execute("INSERT INTO searches (id, user_id, query, region, location, found, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)", (uid(), user_id, query, region, location, len(jobs), now()))
+    history_id = uid()
+    db.execute(
+        "INSERT INTO search_history (id, user_id, query, region, location, filters, sort, found, jobs, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        (history_id, user_id, query, region, location, jdump(filters or {}), sort or "best", len(jobs), jdump(jobs), now()))
+    # Keep only the newest 20 history entries per user.
+    old = db.query("SELECT id FROM search_history WHERE user_id = ? ORDER BY created_at DESC", (user_id,))[20:]
+    for row in old:
+        db.execute("DELETE FROM search_history WHERE id = ?", (row["id"],))
+    return history_id
+
+
+def _history_row(row: dict, with_jobs: bool = False) -> dict:
+    out = {"id": row["id"], "query": row["query"], "region": row["region"], "location": row["location"],
+           "filters": jload(row.get("filters"), {}), "sort": row.get("sort") or "best",
+           "found": row["found"], "created_at": row["created_at"]}
+    if with_jobs:
+        out["jobs"] = jload(row.get("jobs"), [])
+    return out
+
+
+def list_search_history(user_id: str, n: int = 10) -> list[dict]:
+    rows = db.query("SELECT * FROM search_history WHERE user_id = ? ORDER BY created_at DESC", (user_id,))
+    return [_history_row(r) for r in rows[:n]]
+
+
+def get_search_history(user_id: str, history_id: str) -> dict | None:
+    row = db.one("SELECT * FROM search_history WHERE id = ? AND user_id = ?", (history_id, user_id))
+    return _history_row(row, with_jobs=True) if row else None
+
+
+def get_last_search(user_id: str) -> dict | None:
+    row = db.one("SELECT * FROM search_history WHERE user_id = ? ORDER BY created_at DESC", (user_id,))
+    return _history_row(row, with_jobs=True) if row else None
+
+
+def delete_search_history(user_id: str, history_id: str) -> bool:
+    if not db.one("SELECT id FROM search_history WHERE id = ? AND user_id = ?", (history_id, user_id)):
+        return False
+    db.execute("DELETE FROM search_history WHERE id = ? AND user_id = ?", (history_id, user_id))
+    return True
+
+
+def search_stats(user_id: str) -> dict:
+    rows = db.query("SELECT found, query, region, location, created_at FROM search_history WHERE user_id = ? ORDER BY created_at DESC", (user_id,))
+    total_found = sum(r["found"] or 0 for r in rows)
+    last = rows[0] if rows else None
+    return {
+        "total_searches": len(rows),
+        "total_jobs_found": total_found,
+        "last_search": {"query": last["query"], "region": last["region"], "location": last["location"],
+                        "found": last["found"], "created_at": last["created_at"]} if last else None,
+    }
 
 
 def load_results(user_id: str) -> list[dict]:

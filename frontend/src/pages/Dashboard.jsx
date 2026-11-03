@@ -30,6 +30,20 @@ export default function Dashboard({ go }) {
         <div className="kpi"><div className="v">{s.offers}</div><div className="l">Offers</div></div>
         <div className="kpi"><div className="v">{s.response_rate}%</div><div className="l">Response rate</div></div>
         <div className="kpi"><div className="v">{s.avg_match}%</div><div className="l">Average match</div></div>
+        <div className="kpi"><div className="v">{s.total_searches ?? 0}</div><div className="l">Searches done</div></div>
+        <div className="kpi"><div className="v">{s.total_jobs_found ?? s.results ?? 0}</div><div className="l">Jobs found in total</div></div>
+      </div>
+      {s.last_search && (
+        <p className="muted">Last search: <b>{s.last_search.query}</b> · {s.last_search.found} jobs · {String(s.last_search.created_at || "").slice(0, 10)}</p>
+      )}
+      <div className="card">
+        <h2>Recent searches — saved to your account</h2>
+        {!data.recent_searches || data.recent_searches.length === 0 ? <p className="muted">No searches yet. Search once on Find Jobs and it will stay here, under your account.</p> : data.recent_searches.map((h) => (
+          <p key={h.id} className="small">
+            <b>{h.query}</b> · {h.region}{h.location ? ` · ${h.location}` : ""} · {h.found} jobs · {String(h.created_at || "").slice(0, 10)}{" "}
+            <button className="btn secondary" onClick={() => go("jobs", { searchId: h.id })}>View jobs</button>
+          </p>
+        ))}
       </div>
       <div className="card">
         <h2>Follow-ups due</h2>

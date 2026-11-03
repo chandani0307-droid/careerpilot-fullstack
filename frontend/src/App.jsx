@@ -26,7 +26,15 @@ const PAGES = [
 export default function App() {
   const [user, setUser] = useState(null);
   const [page, setPage] = useState("dashboard");
+  const [pendingSearchId, setPendingSearchId] = useState(null);
   const [checking, setChecking] = useState(true);
+
+  // go("jobs", { searchId }) reopens one saved search from the Dashboard.
+  // go("jobs") with no id restores the user's last search instead.
+  function go(next, opts) {
+    setPendingSearchId(next === "jobs" ? (opts?.searchId || null) : null);
+    setPage(next);
+  }
 
   useEffect(() => {
     if (!getToken()) {
@@ -53,7 +61,7 @@ export default function App() {
         <span className="brand">Career<span>Pilot</span></span>
         <nav>
           {PAGES.map(([key, label]) => (
-            <button key={key} className={page === key ? "active" : ""} onClick={() => setPage(key)}>
+            <button key={key} className={page === key ? "active" : ""} onClick={() => go(key)}>
               {label}
             </button>
           ))}
@@ -65,8 +73,8 @@ export default function App() {
         </button>
       </header>
       <main className="wrap">
-        {page === "dashboard" && <Dashboard go={setPage} />}
-        {page === "jobs" && <Jobs />}
+        {page === "dashboard" && <Dashboard go={go} />}
+        {page === "jobs" && <Jobs restoreId={pendingSearchId} onRestored={() => setPendingSearchId(null)} />}
         {page === "applications" && <Applications />}
         {page === "autopilot" && <Autopilot />}
         {page === "studio" && <Studio />}

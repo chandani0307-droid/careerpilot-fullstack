@@ -114,7 +114,7 @@ def change_password(user_id: str, old: str, new: str) -> None:
     db.execute("UPDATE users SET password_hash = ? WHERE id = ?", (hash_password(new), user_id))
 
 
-USER_TABLES = ["profiles", "results", "saved_jobs", "searches", "applications", "app_events", "drafts", "agent_runs", "usage", "user_keys"]
+USER_TABLES = ["profiles", "results", "saved_jobs", "searches", "search_history", "applications", "app_events", "drafts", "agent_runs", "usage", "user_keys"]
 
 
 def delete_account(user_id: str) -> None:

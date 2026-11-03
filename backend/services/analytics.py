@@ -34,8 +34,10 @@ def summary(user_id: str) -> dict:
         demand.update(set(extract_skills(f"{job['title']} {' '.join(job['tags'])} {job['description'][:1500]}")))
         gaps.update(job.get("missing") or [])
     due = [a for a in apps if a["follow_up"] and a["follow_up"] <= today() and a["status"] in ("applied", "screening", "interview")]
+    stats = store.search_stats(user_id)
     return {
         "applications": len(apps), "applied": applied, "interviews": reached["interview"], "offers": reached["offer"], "saved": len(store.saved_ids(user_id)),
+        "total_searches": stats["total_searches"], "total_jobs_found": stats["total_jobs_found"], "last_search": stats["last_search"],
         "response_rate": round(100 * responded / applied) if applied else 0, "avg_match": round(sum(scores) / len(scores)) if scores else 0,
         "by_status": {s: sum(1 for a in apps if a["status"] == s) for s in store.STATUSES},
         "funnel": {"Applied": applied, "Screening": reached["screening"] + reached["interview"] * 0, "Interview": reached["interview"], "Offer": reached["offer"]},

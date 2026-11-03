@@ -313,13 +313,53 @@ def jobs_search(q: str = "", region: str = "all", location: str = "", limit: int
     profile = store.profile_data(user["id"]) if user else None
     filters = {"level": level, "job_type": job_type, "posted_days": posted_days}
     jobs, report = search.search_jobs(q, region, location, limit, profile, filters, sort)
+    search_id = None
     if user:
-        store.save_results(user["id"], jobs, q or "(my profile)", region, location)
-        jobs = _with_saved(user["id"], jobs)
         if min_match:
             jobs = [j for j in jobs if j.get("score", 0) >= min_match]
-    return {"jobs": jobs, "report": report, "sources": search.active_sources(),
+        # Saved per account: the full result list is stored in search_history
+        # (plus the latest list in results, for the dashboard), so leaving
+        # Find Jobs and coming back never asks the user to search again.
+        search_id = store.save_results(user["id"], jobs, q or "(my profile)", region, location, filters, sort)
+        jobs = _with_saved(user["id"], jobs)
+    return {"jobs": jobs, "report": report, "search_id": search_id, "sources": search.active_sources(),
             "free_note": "Free to apply — CareerPilot never charges, and Apply links go to the employer's free listing."}
+
+
+@app.get("/api/jobs/last")
+def jobs_last(user: dict = Depends(current_user)):
+    """The user's most recent search, with its jobs — used to restore Find Jobs
+    when the page is reopened, after a refresh, or on another device."""
+    last = store.get_last_search(user["id"])
+    if not last:
+        return {"search": None, "jobs": [], "report": None}
+    profile = store.profile_data(user["id"])
+    jobs = search.attach_match(list(last["jobs"]), profile)
+    jobs = _with_saved(user["id"], jobs)
+    return {"search": {k: v for k, v in last.items() if k != "jobs"}, "jobs": jobs, "report": None}
+
+
+@app.get("/api/jobs/history")
+def jobs_history(user: dict = Depends(current_user)):
+    return {"history": store.list_search_history(user["id"], 10)}
+
+
+@app.get("/api/jobs/history/{history_id}")
+def jobs_history_one(history_id: str, user: dict = Depends(current_user)):
+    entry = store.get_search_history(user["id"], history_id)
+    if not entry:
+        raise HTTPException(404, "That search is not in your history.")
+    profile = store.profile_data(user["id"])
+    jobs = search.attach_match(list(entry["jobs"]), profile)
+    jobs = _with_saved(user["id"], jobs)
+    return {"search": {k: v for k, v in entry.items() if k != "jobs"}, "jobs": jobs, "report": None}
+
+
+@app.delete("/api/jobs/history/{history_id}")
+def jobs_history_delete(history_id: str, user: dict = Depends(current_user)):
+    if not store.delete_search_history(user["id"], history_id):
+        raise HTTPException(404, "That search is not in your history.")
+    return {"ok": True}
 
 
 @app.get("/api/jobs/saved")
@@ -558,7 +598,7 @@ def reject_draft(draft_id: str, user: dict = Depends(current_user)):
 def dashboard(user: dict = Depends(current_user)):
     summ = analytics.summary(user["id"])
     return {"summary": summ, "recent_events": store.recent_events(user["id"], 8),
-            "recent_searches": store.recent_searches(user["id"], 5),
+            "recent_searches": store.list_search_history(user["id"], 5),
             "profile": store.profile_data(user["id"])}
 
 

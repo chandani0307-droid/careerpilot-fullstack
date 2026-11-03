@@ -31,6 +31,28 @@ def test_results_saved_jobs_and_history_are_per_user():
     assert store.load_results(a) == []
 
 
+def test_search_history_keeps_every_search_per_user():
+    a, b = two_users()
+    hid1 = store.save_results(a, [JOB], "python", "india", "pune", {"level": "any", "job_type": "any", "posted_days": 0}, "best")
+    hid2 = store.save_results(a, [], "data analyst", "india", "bengaluru")
+    # Latest results are replaced, but history keeps both searches with jobs.
+    assert store.load_results(a) == []
+    hist = store.list_search_history(a)
+    assert [h["query"] for h in hist] == ["data analyst", "python"] and hist[1]["id"] == hid1
+    last = store.get_last_search(a)
+    assert last["query"] == "data analyst" and last["jobs"] == []
+    first = store.get_search_history(a, hid1)
+    assert [j["id"] for j in first["jobs"]] == ["job1"] and first["filters"]["level"] == "any"
+    assert store.get_search_history(b, hid1) is None and store.list_search_history(b) == []
+    stats = store.search_stats(a)
+    assert stats == {"total_searches": 2, "total_jobs_found": 1,
+                     "last_search": {"query": "data analyst", "region": "india", "location": "bengaluru", "found": 0, "created_at": last["created_at"]}}
+    assert store.search_stats(b) == {"total_searches": 0, "total_jobs_found": 0, "last_search": None}
+    assert store.delete_search_history(b, hid1) is False
+    assert store.delete_search_history(a, hid1) is True and len(store.list_search_history(a)) == 1
+    assert hid2 != hid1
+
+
 def test_application_flow_status_events_and_isolation():
     a, b = two_users()
     store.upsert_jobs([JOB])

@@ -19,6 +19,7 @@ SCHEMA = [
     "CREATE TABLE IF NOT EXISTS results (user_id TEXT, job_id TEXT, pos INTEGER, relevance DOUBLE PRECISION, PRIMARY KEY (user_id, job_id))",
     "CREATE TABLE IF NOT EXISTS saved_jobs (user_id TEXT, job_id TEXT, saved_at TEXT, PRIMARY KEY (user_id, job_id))",
     "CREATE TABLE IF NOT EXISTS searches (id TEXT PRIMARY KEY, user_id TEXT, query TEXT, region TEXT, location TEXT, found INTEGER, created_at TEXT)",
+    "CREATE TABLE IF NOT EXISTS search_history (id TEXT PRIMARY KEY, user_id TEXT, query TEXT, region TEXT, location TEXT, filters TEXT, sort TEXT, found INTEGER, jobs TEXT, created_at TEXT)",
     "CREATE TABLE IF NOT EXISTS applications (id TEXT PRIMARY KEY, user_id TEXT, job_id TEXT, title TEXT, company TEXT, location TEXT, url TEXT, status TEXT, match_score INTEGER, notes TEXT, cover_letter TEXT, follow_up TEXT, applied_at TEXT, created_at TEXT, updated_at TEXT)",
     "CREATE TABLE IF NOT EXISTS app_events (id TEXT PRIMARY KEY, application_id TEXT, user_id TEXT, status TEXT, note TEXT, created_at TEXT)",
     "CREATE TABLE IF NOT EXISTS drafts (id TEXT PRIMARY KEY, user_id TEXT, job_id TEXT, kind TEXT, title TEXT, recipient TEXT, subject TEXT, body TEXT, status TEXT, result TEXT, created_at TEXT, updated_at TEXT)",
@@ -29,6 +30,7 @@ SCHEMA = [
     "CREATE INDEX IF NOT EXISTS idx_events_app ON app_events (application_id)",
     "CREATE INDEX IF NOT EXISTS idx_drafts_user ON drafts (user_id)",
     "CREATE INDEX IF NOT EXISTS idx_searches_user ON searches (user_id)",
+    "CREATE INDEX IF NOT EXISTS idx_search_history_user ON search_history (user_id)",
 ]
 
 

@@ -70,7 +70,7 @@ function JobCard({ job, onChanged }) {
   );
 }
 
-export default function Jobs() {
+export default function Jobs({ restoreId, onRestored }) {
   const [q, setQ] = useState("");
   const [location, setLocation] = useState("");
   const [region, setRegion] = useState("india");
@@ -85,10 +85,77 @@ export default function Jobs() {
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [searched, setSearched] = useState(false);
+  const [history, setHistory] = useState([]);
+  const [restoredNote, setRestoredNote] = useState("");
+  const [restoring, setRestoring] = useState(true);
+
+  async function loadHistory() {
+    try {
+      const d = await api("/api/jobs/history");
+      setHistory(d.history || []);
+    } catch { /* history is a bonus — a failed load must not block the page */ }
+  }
+
+  function applySavedSearch(d) {
+    if (!d || !d.search) return false;
+    const s = d.search;
+    setQ(s.query === "(my profile)" ? "" : s.query || "");
+    setRegion(s.region || "india");
+    setLocation(s.location || "");
+    setSort(s.sort || "best");
+    const f = s.filters || {};
+    if (f.level) setLevel(f.level);
+    if (f.job_type) setJobType(f.job_type);
+    if (f.posted_days !== undefined) setPosted(Number(f.posted_days) || 0);
+    setJobs(d.jobs || []);
+    setReport(null);
+    setSearched(true);
+    setRestoredNote(`Showing your saved search for “${s.query}” (${s.found} jobs, ${String(s.created_at || "").slice(0, 10)}) — saved to your account, no need to search again.`);
+    return true;
+  }
+
+  // Restore the user's own last search when this page opens, so switching
+  // to Dashboard and back (or refreshing, or logging in again) never loses it.
+  useEffect(() => {
+    let live = true;
+    (async () => {
+      await loadHistory();
+      try {
+        const d = restoreId
+          ? await api(`/api/jobs/history/${restoreId}`)
+          : await api("/api/jobs/last");
+        if (live) applySavedSearch(d);
+      } catch { /* no saved search yet — user just searches normally */ }
+      if (live) {
+        setRestoring(false);
+        if (onRestored) onRestored();
+      }
+    })();
+    return () => { live = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  async function restoreOne(id) {
+    setBusy(true);
+    setError("");
+    try {
+      const d = await api(`/api/jobs/history/${id}`);
+      applySavedSearch(d);
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    } catch (e) { setError(e.message); } finally { setBusy(false); }
+  }
+
+  async function deleteOne(id) {
+    try {
+      await api(`/api/jobs/history/${id}`, { method: "DELETE" });
+      setHistory((h) => h.filter((x) => x.id !== id));
+    } catch (e) { setError(e.message); }
+  }
 
   async function search(params) {
     setError("");
     setBusy(true);
+    setRestoredNote("");
     try {
       const d = await api("/api/jobs/search?" + new URLSearchParams({
         q: params.q, region: params.region, location: params.location, limit: "60",
@@ -99,6 +166,7 @@ export default function Jobs() {
       setJobs(list);
       setReport(d.report);
       setSearched(true);
+      loadHistory();
     } catch (e) {
       setError(e.message);
     } finally {
@@ -185,8 +253,26 @@ export default function Jobs() {
       </form>
 
       {error && <div className="error">{error}</div>}
+      {restoring && <p className="muted">Restoring your saved search…</p>}
+      {restoredNote && <div className="notice">{restoredNote}</div>}
       {report && (
         <p><b>{jobs.length} jobs</b> from {Object.values(report.sources).filter((s) => s.count).length} sources in {report.elapsed}s · searched: <i>{report.queries.join(", ")}</i></p>
+      )}
+      {!report && searched && jobs.length > 0 && (
+        <p><b>{jobs.length} jobs</b> from your saved search.</p>
+      )}
+      {history.length > 0 && (
+        <div className="card">
+          <h2>Your recent searches — saved to your account</h2>
+          <p className="small muted">Every search is kept under your email, so you can reopen it any time without searching again.</p>
+          {history.map((h) => (
+            <p key={h.id} className="small">
+              <b>{h.query}</b> · {h.region}{h.location ? ` · ${h.location}` : ""} · {h.found} jobs · {String(h.created_at || "").slice(0, 10)}{" "}
+              <button type="button" className="btn secondary" disabled={busy} onClick={() => restoreOne(h.id)}>View</button>{" "}
+              <button type="button" className="btn ghost" onClick={() => deleteOne(h.id)}>Delete</button>
+            </p>
+          ))}
+        </div>
       )}
       {report?.sample > 0 && (
         <div className="notice">Live sources returned very few jobs, so some clearly marked sample jobs were added. Check your internet and try again — no key or payment is needed.</div>

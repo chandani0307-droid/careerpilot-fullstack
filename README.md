@@ -21,6 +21,14 @@ instant on repeat. (The free Render backend still sleeps after ~15 minutes
 idle, so the very first visit after a long pause takes ~1 minute to wake up —
 after that it is fast.)
 
+**Searches are saved to your account.** Every search is stored under your
+email (query, filters and the full job list, newest 20 kept), so leaving Find
+Jobs for the Dashboard — or refreshing, logging out and back in — never loses
+it. Find Jobs reopens your last search automatically, Recent searches on Find
+Jobs and the Dashboard let you reopen or delete any earlier one, and the
+Dashboard shows how many searches you have done, how many jobs they found in
+total, and your last search. One account can never see another's history.
+
 ## What changed vs the Streamlit version
 
 | | Streamlit version | This version |
@@ -84,7 +92,7 @@ applies and there is no shared daily limit. Without any key, templates are used.
 
 ```bash
 cd backend
-python tests/run_all.py    # 32/32: original core/service tests + FastAPI TestClient smoke tests
+python tests/run_all.py    # 42/42: original core/service tests + FastAPI TestClient smoke tests + search-history test
 ```
 
 ## Honest limits
