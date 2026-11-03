@@ -14,6 +14,13 @@ when no region is chosen, India jobs rank above equally relevant jobs
 elsewhere, and Find Jobs defaults to the India region with one-tap city
 shortcuts (Bengaluru, Hyderabad, Pune, Mumbai, Delhi NCR, Chennai).
 
+**Fast search.** Each source's pages are fetched in parallel, and a repeat
+search within 10 minutes is served instantly from a short-lived cache, so a
+search that used to take ~24s now takes a few seconds the first time and is
+instant on repeat. (The free Render backend still sleeps after ~15 minutes
+idle, so the very first visit after a long pause takes ~1 minute to wake up —
+after that it is fast.)
+
 ## What changed vs the Streamlit version
 
 | | Streamlit version | This version |

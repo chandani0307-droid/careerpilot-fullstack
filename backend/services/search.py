@@ -10,6 +10,7 @@ India-first: CareerPilot is built mainly for Indian users. When no region is
 chosen, India jobs are ranked above equally relevant jobs elsewhere, and the
 Find Jobs page defaults to the India region.
 """
+import copy
 import hashlib
 import html
 import json
@@ -56,6 +57,49 @@ def http_get(url: str, params: dict | None = None, headers: dict | None = None, 
 
 def get_json(url, params=None, headers=None):
     return json.loads(http_get(url, params, headers))
+
+
+# ───────────────────────── speed: parallel pages + result cache ─────────────────────────
+# A live search used to take ~24s: The Muse fetches up to 6 pages, Himalayas 3
+# queries and RSS several feeds, all one after another inside a single provider
+# task. Pages/feeds of one provider now run concurrently, and repeat searches
+# are served from a short-lived in-memory cache (10 min), so the same query
+# comes back instantly. The cache stores jobs before per-user match scoring,
+# so one user's profile can never leak into another user's results.
+_SEARCH_CACHE: dict = {}
+SEARCH_CACHE_TTL = 600  # seconds
+
+
+def _parallel(calls):
+    """Run zero-arg callables concurrently, results in call order.
+
+    A failed call yields None for its slot; callers treat that as no jobs
+    from that page/feed, the same as an empty response.
+    """
+    if not calls:
+        return []
+    if len(calls) == 1:
+        try:
+            return [calls[0]()]
+        except Exception:  # noqa: BLE001
+            return [None]
+    with ThreadPoolExecutor(max_workers=len(calls)) as pool:
+        futs = [pool.submit(fn) for fn in calls]
+        out = []
+        for f in futs:
+            try:
+                out.append(f.result())
+            except Exception:  # noqa: BLE001
+                out.append(None)
+        return out
+
+
+def _prune_cache():
+    now = time.time()
+    for k in [k for k, (_, _, ts) in _SEARCH_CACHE.items() if now - ts > SEARCH_CACHE_TTL]:
+        del _SEARCH_CACHE[k]
+    while len(_SEARCH_CACHE) > 200:
+        del _SEARCH_CACHE[min(_SEARCH_CACHE, key=lambda k: _SEARCH_CACHE[k][2])]
 
 
 # ───────────────────────── normalising ─────────────────────────
@@ -151,9 +195,10 @@ def p_remoteok(q, region, location, limit):
 
 
 def p_arbeitnow(q, region, location, limit):
+    calls = [lambda page=page: get_json(URLS["arbeitnow"], {"page": page}).get("data", []) for page in (1, 2)]
     out = []
-    for page in (1, 2):
-        for j in get_json(URLS["arbeitnow"], {"page": page}).get("data", []):
+    for data in _parallel(calls):
+        for j in data or []:
             out.append(make_job(title=j.get("title"), company=j.get("company_name"), location=j.get("location") or "Europe", remote=bool(j.get("remote")), url=j.get("url"),
                                 description=j.get("description"), source="Arbeitnow", tags=j.get("tags"), posted=j.get("created_at"), job_type=" ".join(j.get("job_types") or [])))
     return out
@@ -176,23 +221,22 @@ def p_jobicy(q, region, location, limit):
 
 
 def p_himalayas(q, region, location, limit):
+    calls = [lambda page=page: get_json(URLS["himalayas"], {"q": q, "sort": "recent", "page": page}).get("jobs", []) for page in range(1, 3)]
+    if region in ("all", "india"):
+        # India-first: Himalayas' text search honours "india" in the query — a
+        # "python india" search returns ~18/20 India-restricted roles, while
+        # plain "python" returns ~1/20 (verified live 2026-11-02). The
+        # location= param, by contrast, is ignored by this API.
+        calls.append(lambda: get_json(URLS["himalayas"], {"q": f"{q} india", "sort": "recent", "page": 1}).get("jobs", []))
     out = []
-    def add(jobs):
-        for j in jobs:
+    for jobs in _parallel(calls):
+        for j in jobs or []:
             places = j.get("locationRestrictions") or []
             out.append(make_job(title=j.get("title"), company=j.get("companyName"), location=", ".join(places) if places else "Worldwide", remote=True,
                                 url=j.get("applicationLink") or j.get("guid"), description=j.get("description") or j.get("excerpt"), source="Himalayas",
                                 tags=(j.get("categories") or []) + [str(x) for x in (j.get("seniority") or [])] if isinstance(j.get("seniority"), list) else (j.get("categories") or []),
                                 salary=salary_text(j.get("minSalary"), j.get("maxSalary"), j.get("currency") or "", j.get("salaryPeriod") or ""),
                                 posted=j.get("pubDate") or j.get("publishedAt"), job_type=j.get("employmentType")))
-    for page in range(1, 3):
-        add(get_json(URLS["himalayas"], {"q": q, "sort": "recent", "page": page}).get("jobs", []))
-    if region in ("all", "india"):
-        # India-first: Himalayas' text search honours "india" in the query — a
-        # "python india" search returns ~18/20 India-restricted roles, while
-        # plain "python" returns ~1/20 (verified live 2026-11-02). The
-        # location= param, by contrast, is ignored by this API.
-        add(get_json(URLS["himalayas"], {"q": f"{q} india", "sort": "recent", "page": 1}).get("jobs", []))
     return out
 
 
@@ -201,14 +245,15 @@ def p_muse(q, region, location, limit):
     for key, names in MUSE_CATEGORIES.items():
         if key in q.lower():
             cats += [n for n in names if n not in cats]
+    calls = [lambda category=category, page=page: get_json(URLS["muse"], {"category": category, "page": page}).get("results", [])
+             for category in (cats or ["Software Engineering"])[:2] for page in range(0, 3)]
     out = []
-    for category in (cats or ["Software Engineering"])[:2]:
-        for page in range(0, 3):
-            for j in get_json(URLS["muse"], {"category": category, "page": page}).get("results", []):
-                places = [x.get("name", "") for x in j.get("locations") or []]
-                out.append(make_job(title=j.get("name"), company=(j.get("company") or {}).get("name"), location=", ".join(places) or "Flexible / Remote",
-                                    url=(j.get("refs") or {}).get("landing_page"), description=j.get("contents"), source="The Muse",
-                                    tags=[c.get("name") for c in j.get("categories") or []] + [lv.get("name") for lv in j.get("levels") or []], posted=j.get("publication_date")))
+    for results in _parallel(calls):
+        for j in results or []:
+            places = [x.get("name", "") for x in j.get("locations") or []]
+            out.append(make_job(title=j.get("name"), company=(j.get("company") or {}).get("name"), location=", ".join(places) or "Flexible / Remote",
+                                url=(j.get("refs") or {}).get("landing_page"), description=j.get("contents"), source="The Muse",
+                                tags=[c.get("name") for c in j.get("categories") or []] + [lv.get("name") for lv in j.get("levels") or []], posted=j.get("publication_date")))
     return out
 
 
@@ -218,20 +263,29 @@ def p_muse(q, region, location, limit):
 
 
 def p_rss(q, region, location, limit):
-    out, errors = [], []
-    for feed in cfg.rss_feeds:
+    def fetch_feed(feed):
         try:
             root = ET.fromstring(http_get(feed))
         except Exception as exc:  # noqa: BLE001  (one dead feed must never kill the other feeds)
-            errors.append(f"{feed}: {type(exc).__name__}")
-            continue
+            return [], f"{feed}: {type(exc).__name__}"
+        items = []
         for item in root.iter("item"):
             raw = (item.findtext("title") or "").strip()
             company, title = ("", raw)
             if ":" in raw:
                 company, title = [s.strip() for s in raw.split(":", 1)]
-            out.append(make_job(title=title, company=company or "Unknown", location="Remote", remote=True, url=item.findtext("link"), description=item.findtext("description"),
-                                source="RSS", posted=item.findtext("pubDate")))
+            items.append(make_job(title=title, company=company or "Unknown", location="Remote", remote=True, url=item.findtext("link"), description=item.findtext("description"),
+                                  source="RSS", posted=item.findtext("pubDate")))
+        return items, None
+
+    out, errors = [], []
+    for result in _parallel([lambda feed=feed: fetch_feed(feed) for feed in cfg.rss_feeds]):
+        if not result:
+            continue
+        items, err = result
+        out += items
+        if err:
+            errors.append(err)
     if not out and errors:
         raise RuntimeError("RSS feeds failed: " + "; ".join(errors))
     return out
@@ -375,40 +429,53 @@ def search_jobs(query: str = "", region: str = "all", location: str = "", limit:
     started, filters = time.time(), filters or {}
     queries = expand_queries(query, profile)
     tokens, phrase = tokens_of(queries), queries[0].lower()
-    tasks = [(name, q) for name, (_, searchable, ready) in PROVIDERS.items() if ready() for q in (queries if searchable else queries[:1])]
-    report = {"queries": queries, "sources": {name: {"count": 0, "error": ""} for name in active_sources()}}
-    raw: list[dict] = []
-    pool = ThreadPoolExecutor(max_workers=10)
-    futures = {pool.submit(PROVIDERS[name][0], q, region, location, max(limit, 30)): name for name, q in tasks}
-    try:
-        for future in as_completed(futures, timeout=cfg.http_timeout * 2 + 6):
-            name = futures[future]
-            try:
-                found = [j for j in future.result() if j]
-                report["sources"][name]["count"] += len(found)
-                raw += found
-            except Exception as exc:  # noqa: BLE001  (a broken source must never break the search)
-                report["sources"][name]["error"] = f"{type(exc).__name__}: {str(exc)[:80]}"
-    except Exception:  # noqa: BLE001  (overall deadline: keep what we already have)
-        pass
-    pool.shutdown(wait=False, cancel_futures=True)
+    key = (tuple(queries), region, location.strip().lower(), limit, tuple(sorted(filters.items())))
+    hit = _SEARCH_CACHE.get(key)
+    if hit and time.time() - hit[2] < SEARCH_CACHE_TTL:
+        jobs = copy.deepcopy(hit[0])
+        report = dict(hit[1])
+        report["cached"] = True
+    else:
+        tasks = [(name, q) for name, (_, searchable, ready) in PROVIDERS.items() if ready() for q in (queries if searchable else queries[:1])]
+        report = {"queries": queries, "sources": {name: {"count": 0, "error": ""} for name in active_sources()}}
+        raw: list[dict] = []
+        pool = ThreadPoolExecutor(max_workers=10)
+        futures = {pool.submit(PROVIDERS[name][0], q, region, location, max(limit, 30)): name for name, q in tasks}
+        try:
+            for future in as_completed(futures, timeout=cfg.http_timeout * 2 + 6):
+                name = futures[future]
+                try:
+                    found = [j for j in future.result() if j]
+                    report["sources"][name]["count"] += len(found)
+                    raw += found
+                except Exception as exc:  # noqa: BLE001  (a broken source must never break the search)
+                    report["sources"][name]["error"] = f"{type(exc).__name__}: {str(exc)[:80]}"
+        except Exception:  # noqa: BLE001  (overall deadline: keep what we already have)
+            pass
+        pool.shutdown(wait=False, cancel_futures=True)
 
-    jobs = [j for j in _dedupe(raw) if _is_relevant(tokens, j) and _passes(j, region, location, filters)]
-    report["live"] = len(jobs)
-    if cfg.mock_fallback and len(jobs) < 15:
-        have = {j["id"] for j in jobs}
-        extra = [j for j in sample_jobs() if j["id"] not in have and _is_relevant(tokens, j) and _passes(j, region, location, filters)]
-        jobs += extra
-        report["sample"] = len(extra)
-    for job in jobs:
-        job["relevance"] = relevance(tokens, phrase, job)
-    if region == "all":
-        # India-first: when no region is chosen, India jobs rank above equally
-        # relevant jobs elsewhere. Region-filtered searches are unaffected.
+        jobs = [j for j in _dedupe(raw) if _is_relevant(tokens, j) and _passes(j, region, location, filters)]
+        report["live"] = len(jobs)
+        if cfg.mock_fallback and len(jobs) < 15:
+            have = {j["id"] for j in jobs}
+            extra = [j for j in sample_jobs() if j["id"] not in have and _is_relevant(tokens, j) and _passes(j, region, location, filters)]
+            jobs += extra
+            report["sample"] = len(extra)
         for job in jobs:
-            if job["region"] == "india":
-                job["relevance"] = min(100.0, job["relevance"] + 12)
-    report["india_boost"] = region == "all"
+            job["relevance"] = relevance(tokens, phrase, job)
+        if region == "all":
+            # India-first: when no region is chosen, India jobs rank above equally
+            # relevant jobs elsewhere. Region-filtered searches are unaffected.
+            for job in jobs:
+                if job["region"] == "india":
+                    job["relevance"] = min(100.0, job["relevance"] + 12)
+        report["india_boost"] = region == "all"
+        report["candidates"] = len(raw)
+        report["cached"] = False
+        # Cache before per-user scoring/sorting, so a cached result is the same
+        # for every user and every sort; scoring and ordering run per request.
+        _SEARCH_CACHE[key] = (copy.deepcopy(jobs), dict(report), time.time())
+        _prune_cache()
     attach_match(jobs, profile)
     if sort == "newest":
         jobs.sort(key=lambda j: (j["posted_at"] or "0000", j["relevance"]), reverse=True)
@@ -416,7 +483,6 @@ def search_jobs(query: str = "", region: str = "all", location: str = "", limit:
         jobs.sort(key=lambda j: j["relevance"] * (0.55 if profile else 1) + j.get("score", 0) * (0.45 if profile else 0), reverse=True)
     jobs = _diversify(jobs)
     report["elapsed"] = round(time.time() - started, 1)
-    report["candidates"] = len(raw)
     return jobs[:limit], report
 
 

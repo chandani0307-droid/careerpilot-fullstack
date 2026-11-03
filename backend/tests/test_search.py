@@ -49,6 +49,7 @@ def fake_http(url, params=None, headers=None, timeout=None):
 def setup_module_env(keys=True):
     # Free version: no keys at all. Even if old keys are set, they must be ignored.
     search.http_get = fake_http
+    search._SEARCH_CACHE.clear()  # each test starts with a cold cache
     for name in ("ADZUNA_APP_ID", "ADZUNA_APP_KEY", "RAPIDAPI_KEY"):
         os.environ.pop(name, None)
     if keys:
@@ -193,3 +194,44 @@ def test_real_http_function_reads_json_from_a_local_server():
     real = search.__dict__["http_get"]
     search.http_get = fake_http  # restore the fake afterwards
     server.shutdown()
+
+
+def test_repeat_search_is_cached_and_fast():
+    setup_module_env()
+    calls = {"n": 0}
+    def counting(url, params=None, headers=None, timeout=None):
+        calls["n"] += 1
+        return fake_http(url, params, headers, timeout)
+    search.http_get = counting
+    jobs1, report1 = search.search_jobs("python developer", "all", "", 60)
+    assert report1.get("cached") is False
+    first_calls = calls["n"]
+    assert first_calls > 0
+    jobs2, report2 = search.search_jobs("python developer", "all", "", 60)
+    assert report2.get("cached") is True
+    assert calls["n"] == first_calls, "repeat search must not hit the network again"
+    assert [j["id"] for j in jobs1] == [j["id"] for j in jobs2]
+    # A different profile still gets its own match scores from the same cache.
+    profile = {"skills": ["Python", "Docker", "PostgreSQL"], "target_roles": ["Backend Engineer"], "experience_years": 4, "preferred_regions": ["india"]}
+    jobs3, report3 = search.search_jobs("python developer", "all", "", 60, profile=profile)
+    assert report3.get("cached") is True
+    assert all("score" in j and "matched" in j for j in jobs3)
+    assert any(j.get("score", 0) > 0 for j in jobs3)
+
+
+def test_slow_pages_fetch_in_parallel_not_one_by_one():
+    setup_module_env()
+    def slow(url, params=None, headers=None, timeout=None):
+        time.sleep(1.0)
+        return fake_http(url, params, headers, timeout)
+    search.http_get = slow
+    try:
+        start = time.monotonic()
+        # "data analyst" hits 2 Muse categories x 3 pages, 3 Himalayas queries
+        # and 3 RSS feeds; sequential pages would take ~6s inside one provider.
+        jobs, report = search.search_jobs("data analyst", "all", "", 60)
+        elapsed = time.monotonic() - start
+    finally:
+        search.http_get = fake_http
+    assert jobs
+    assert elapsed < 3.5, f"search took {elapsed:.1f}s, pages are not fetched in parallel"
